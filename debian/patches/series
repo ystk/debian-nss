@@ -12,3 +12,9 @@
 96_NSS_VersionCheck.patch
 97_SSL_RENEGOTIATE_TRANSITIONAL.patch
 lower-dhe-priority.patch
+fraudulent-certs.patch
+diginotar.patch
+digicert.patch
+CVE-2011-3640
+CVE-2012-0441
+TURKTRUST.patch

@@ -1,3 +1,56 @@
+nss (3.12.8-1+squeeze6) stable-security; urgency=low
+
+  * Explicitly distrust two intermediate CA certificates mis-issued by
+    TURKTRUST.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 04 Jan 2013 10:32:09 +0100
+
+nss (3.12.8-1+squeeze5) stable-security; urgency=low
+
+  * Address CVE-2012-0441 (Insufficient length checking in QuickDER decoder)
+  * debian/rules: Work around NSS not building on Linux 3.x kernels.
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 02 Jun 2012 09:46:21 +0200
+
+nss (3.12.8-1+squeeze4) stable-security; urgency=low
+
+  * Explicitly distrust malaysian Digicert Sdn. Bhd CA certificate.
+  * Address CVE-2011-3640 (Untrusted search path vulnerability).
+    Closes: #647614.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 06 Nov 2011 09:01:08 +0100
+
+nss (3.12.8-1+squeeze3) stable-security; urgency=low
+
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*:
+    Explicitly distrust various DigiNotar CAs:
+    - DigiNotar Root CA
+    - DigiNotar Services 1024 CA
+    - DigiNotar Cyber CA
+    - DigiNotar Cyber CA 2nd
+    - DigiNotar PKIoverheid
+    - DigiNotar PKIoverheid G2
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 03 Sep 2011 09:32:46 +0200
+
+nss (3.12.8-1+squeeze2) stable-security; urgency=low
+
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*:
+    Remove DigiNotar Root CA.
+
+ -- Mike Hommey <glandium@debian.org>  Wed, 31 Aug 2011 08:54:44 +0200
+
+nss (3.12.8-1+squeeze1) stable-security; urgency=low
+
+  * debian/rules: Fallback to DEB_BUILD_ARCH when dpkg-architecture does't
+    support DEB_BUILD_ARCH_BITS.
+  * debian/control: Lower build depends on dpkg-dev to (>= 1.13.19), which
+    was the value before starting to use DEB_BUILD_ARCH_BITS.
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*: Mark fraudulent
+    Comodo certificates as untrusted.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 24 Mar 2011 17:09:25 +0100
+
 nss (3.12.8-1) unstable; urgency=low
 
   * New upstream release.
