@@ -1,3 +1,269 @@
+nss (2:3.14.5-1) stable-security; urgency=low
+
+  * New upstream release.
+    - Fixes CVE-2013-5605.
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 16 Nov 2013 08:23:54 +0900
+
+nss (2:3.14.4-1) stable-security; urgency=low
+
+  * New upstream release.
+    - Fixes CVE-2013-1739. Closes: #726473.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 31 Oct 2013 13:51:57 +0900
+
+nss (2:3.14.3-1) unstable; urgency=high
+
+  * New upstream release.
+    - Fixes TLS timing attack (luck 13). Closes: #699888.
+  * debian/libnss3.symbols: Add NSS_3.14.3 symbol version.
+  * debian/control: Unbump sqlite3 build dependency, 3.14.3 lifted the need
+    for sqlite 3.7.15.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 17 Mar 2013 15:01:06 +0100
+
+nss (2:3.14.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/control: Bump sqlite3 build dependency.
+  * debian/rules: Avoid installing freebl, softokn, nssckbi and nssdbm in two
+    places.
+  * debian/libnss3-1d.lintian-overrides.in: Stop preprocessing, it has nothing
+    to preprocess anymore.
+  * debian/libnss3.lintian-overrides.in: Fix not to contain a reference to the
+    libnss3-1d package.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 15 Feb 2013 10:06:59 +0100
+
+nss (2:3.14.1.with.ckbi.1.93-1) unstable; urgency=low
+
+  * New upstream release.
+    - Explicitly distrust two intermediate CA certificates mis-issued by
+      TURKTRUST.
+  * debian/patches/95_add_spi+cacert_ca_certs.patch: Refreshed.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 04 Jan 2013 11:16:33 +0100
+
+nss (2:3.14.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches: Removed patches applied upstream, and refreshed
+    the others.
+  * debian/libnss3.symbols: Updated for new symbols.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 23 Dec 2012 17:40:21 +0100
+
+nss (2:3.14-2) unstable; urgency=low
+
+  * debian/nss-config.in: Fix nss-config when version is in the x.y form
+    instead of x.y.z.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 07 Dec 2012 17:07:05 +0100
+
+nss (2:3.14-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches: Removed patches applied upstream, and refreshed
+    the others.
+  * debian/libnss3.symbols: Updated for new symbols.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 01 Nov 2012 10:37:39 +0100
+
+nss (2:3.13.6-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/rules: Use xz compression for binary packages.
+    Thanks Ansgar Burchardt. Closes: #683835.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 31 Aug 2012 09:56:53 +0200
+
+nss (2:3.13.5-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 15 Jun 2012 09:40:00 +0200
+
+nss (2:3.13.4-3) unstable; urgency=low
+
+  * debian/rules: Skip epoch when getting upstream version number.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 20 May 2012 07:36:11 +0200
+
+nss (2:3.13.4-2) unstable; urgency=low
+
+  * debian/control, debian/libnss3*, debian/rules,
+    mozilla/security/coreconf/*, mozilla/security/nss/lib/*/manifest.mn:
+    Move to unversioned library. ABI compatibility is ensured upstream, and
+    the SO version, if it needed a change at any time, would be a change in
+    the library name. There is no reason to keep making compatibility more
+    difficult with other distros and upstream binary releases. While previous
+    versions were one-way compatible (binaries built against other distros or
+    upstream nspr could work on Debian), this approach works both ways.
+  * debian/control:
+    - Bump Standards-Version to 3.9.3.0. No changes required.
+    - Force to build against libnspr4-dev >= 2:4.9
+  * Removed unapplied patches.
+  * Adding an epoch to match the old libnss3 package that used to be in
+    the Debian archive.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 17 May 2012 09:45:36 +0200
+
+nss (3.13.4-1) unstable; urgency=low
+
+  * New upstream release.
+    - Changed __GNUC_MINOR__ use in pkcs11n.h. Closes: #650319.
+  * mozilla/security/nss/cmd/certcgi/certcgi.c,
+    mozilla/security/nss/cmd/digest/digest.c,
+    mozilla/security/nss/cmd/signver/pk7print.c: Import patch from Moritz
+    Muehlenhoff for hardened format strings.
+  * debian/make.mk, debian/rules, debian/control: Enable hardening.
+    Closes: #657325.
+  * debian/libnss3-1d.lintian-overrides.in, debian/rules: Use wildcards in
+    lintian override. Closes: #670013.
+  * debian/compat, debian/control: Bump debian/compat to 9. This has the
+    effect of using build-id for debug files, thus Closes: #670015.
+  * debian/libnss3-1d.symbols: Add symbols for /usr/lib/nss/ libraries.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 29 Apr 2012 09:48:58 +0200
+
+nss (3.13.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/libnss3-1d.symbols: Updated to fit new upstream.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 24 Feb 2012 09:56:10 +0100
+
+nss (3.13.2~beta1-3) experimental; urgency=low
+
+  * debian/libnss3-1d.symbols: Fix symbol version for the symbol added in
+    -2.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 23 Dec 2011 19:20:23 +0100
+
+nss (3.13.2~beta1-2) experimental; urgency=low
+
+  * mozilla/security/nss/lib/ssl/*,
+    mozilla/security/nss/cmd/tstclnt/tstclnt.c,
+    mozilla/security/nss/tests/ssl/ssl.sh: Apply patches from bz#542832,
+    required for Iceweasel 11.
+  * debian/libnss3-1d.symbols: Add corresponding symbol.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 23 Dec 2011 17:54:03 +0100
+
+nss (3.13.2~beta1-1) experimental; urgency=low
+
+  * New upstream snapshot, picked from NSS_3_13_2_BETA1 cvs tag.
+  * debian/libnss3-1d.symbols: Add NSS 3.13.2 symbols.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 23 Dec 2011 16:22:05 +0100
+
+nss (3.13.1.with.ckbi.1.88-1) unstable; urgency=low
+
+  * New upstream release.
+    - Distrusts malaysian Digicert Sdn. Bhd CA certificate.
+    - Addresses CVE-2011-3640 (Untrusted search path vulnerability).
+      Closes: #647614.
+  * debian/patches/*: Refreshed patches.
+  * debian/libnss3-1d.symbols: Add NSS 3.13 symbols.
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 05 Nov 2011 17:05:26 +0100
+
+nss (3.12.11-3) unstable; urgency=high
+
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*:
+    Explicitely distrust various DigiNotar CAs:
+    - DigiNotar Root CA
+    - DigiNotar Services 1024 CA
+    - DigiNotar Cyber CA
+    - DigiNotar Cyber CA 2nd
+    - DigiNotar PKIoverheid
+    - DigiNotar PKIoverheid G2
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 03 Sep 2011 09:33:28 +0200
+
+nss (3.12.11-2) unstable; urgency=high
+
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*:
+    Remove DigiNotar Root CA.
+
+ -- Mike Hommey <glandium@debian.org>  Wed, 31 Aug 2011 08:49:00 +0200
+
+nss (3.12.11-1) unstable; urgency=low
+
+  * New upstream release.
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*,
+  * mozilla/security/coreconf/{config,Linux}.mk: Refreshed.
+  * debian/copyright: Update dbm license according to that in the source.
+    Closes: #624310
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 12 Aug 2011 12:45:08 +0200
+
+nss (3.12.10-3) unstable; urgency=low
+
+  * debian/nss-config.in, debian/nss.pc.in, debian/rules: Return the multiarch
+    path in nss-config and nss.pc.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 21 Jul 2011 18:08:48 +0200
+
+nss (3.12.10-2) unstable; urgency=low
+
+  * debian/control, debian/libnss3-1d.dirs,
+    debian/libnss3-1d.lintian-overrides.in, debian/libnss3-dev.dirs,
+    debian/libnss3-1d.links.in, debian/libnss3-dev.links.in,
+    debian/rules: Switch to multi-arch while keeping backports easy.
+    Closes: #497088.
+
+ -- Mike Hommey <glandium@debian.org>  Mon, 04 Jul 2011 11:24:18 +0200
+
+nss (3.12.10-1) unstable; urgency=low
+
+  * New upstream release.
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*: Refreshed.
+  * debian/control: Build depend on libnspr4-dev >= 4.8.8.
+  * debian/libnss3-1d.symbols: Add new symbol version.
+
+ -- Mike Hommey <glandium@debian.org>  Wed, 25 May 2011 10:20:59 +0200
+
+nss (3.12.9.with.ckbi.1.82-1) unstable; urgency=low
+
+  * New upstream release.
+    - Marks fraudulent Comodo certificates as untrusted.
+  * mozilla/security/nss/lib/ckfw/builtins/certdata.*: Refreshed.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 24 Mar 2011 16:37:46 +0100
+
+nss (3.12.9-2) unstable; urgency=low
+
+  * Upload to unstable.
+  * debian/rules: Fallback to DEB_BUILD_ARCH when dpkg-architecture does't
+    support DEB_BUILD_ARCH_BITS.
+  * debian/control: Lower build depends on dpkg-dev to (>= 1.13.19), which
+    was the previous value.
+  * mozilla/security/nss/lib/freebl/unix_rand.c: We don't need to prevent
+    using netstat for entropy seeding. The seeding will stop before netstat
+    if it could get data from /dev/urandom.
+  * mozilla/security/coreconf/Linux.mk: We shouldn't need to special case
+    mips64 anymore.
+  * mozilla/security/nss/cmd/shlibsign/Makefile, debian/rules: Don't rely
+    on patching the source to not create .chk files during build.
+
+ -- Mike Hommey <glandium@debian.org>  Sun, 06 Mar 2011 09:58:41 +0100
+
+nss (3.12.9-1) experimental; urgency=low
+
+  * New upstream release.
+
+ -- Mike Hommey <glandium@debian.org>  Sat, 15 Jan 2011 11:33:35 +0100
+
+nss (3.12.9~beta2-1) experimental; urgency=low
+
+  * New upstream snapshot, picked from NSS_3_12_9_BETA2 cvs tag.
+  * debian/patches/*: Refresh patches.
+  * debian/libnss3-1d.symbols: Add new symbol versions.
+  * debian/rules: Bump shlibs.
+
+ -- Mike Hommey <glandium@debian.org>  Fri, 17 Dec 2010 15:01:31 +0100
+
 nss (3.12.8-1) unstable; urgency=low
 
   * New upstream release.

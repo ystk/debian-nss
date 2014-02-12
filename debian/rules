@@ -1,25 +1,32 @@
 #!/usr/bin/make -f
+include debian/make.mk
 
-UPSTREAM_VERSION := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^~]*\)\(~.*\)\?-.*$$/\1/ p')
+$(call lazy,DEB_HOST_MULTIARCH,$$(shell dpkg-architecture -qDEB_HOST_MULTIARCH))
+$(call lazy,CFLAGS,$$(shell dpkg-buildflags --get CFLAGS))
+$(call lazy,CPPFLAGS,$$(shell dpkg-buildflags --get CPPFLAGS))
+$(call lazy,LDFLAGS,$$(shell dpkg-buildflags --get LDFLAGS))
+
+PREPROCESS_FILES := $(wildcard debian/*.in)
+
+$(PREPROCESS_FILES:.in=): %: %.in
+	sed 's,/@DEB_HOST_MULTIARCH@,$(DEB_HOST_MULTIARCH:%=/%),g;$(EXTRA_REPLACES)' $< > $@
+
+UPSTREAM_VERSION := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([0-9]*:\)\?\([^~]*\)\(~.*\)\?-.*$$/\2/ p')
 MOD_MAJOR_VERSION := $(word 1, $(subst ., ,$(UPSTREAM_VERSION)))
 MOD_MINOR_VERSION := $(word 2, $(subst ., ,$(UPSTREAM_VERSION)))
-MOD_PATCH_VERSION := $(word 3, $(subst ., ,$(UPSTREAM_VERSION)))
+MOD_PATCH_VERSION := $(or $(word 3, $(subst ., ,$(UPSTREAM_VERSION))),0)
 
-ifeq (64,$(shell dpkg-architecture -qDEB_BUILD_ARCH_BITS))
+debian/nss.pc: EXTRA_REPLACES := s/@VERSION@/$(UPSTREAM_VERSION)/
+debian/nss-config: EXTRA_REPLACES := s/@MOD_MAJOR_VERSION@/$(MOD_MAJOR_VERSION)/;s/@MOD_MINOR_VERSION@/$(MOD_MINOR_VERSION)/;s/@MOD_PATCH_VERSION@/$(MOD_PATCH_VERSION)/
+debian/libnss3.lintian-overrides: EXTRA_REPLACES := s,/@DEB_HOST_MULTIARCH_WC@,$(DEB_HOST_MULTIARCH:%=/*),g
+
+ifneq (,$(filter 64 alpha amd64 ia64 s390x,$(shell dpkg-architecture -qDEB_BUILD_ARCH_BITS 2> /dev/null || dpkg-architecture -qDEB_BUILD_ARCH)))
 USE_64 := USE_64=1
 else
 USE_64 :=
 endif
 
-CFLAGS := -Wall -pipe
-
-ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
-	CFLAGS += -O0
-else
-	CFLAGS += -Os
-endif
-
-CFLAGS += -g
+CFLAGS += -Wall -pipe
 
 DISTDIR := $(CURDIR)/mozilla/dist
 
@@ -35,9 +42,12 @@ override_dh_auto_build:
 		DIST=$(DISTDIR) \
 		BUILD_OPT=1 \
 		NS_USE_GCC=1 \
-		OPTIMIZER="$(CFLAGS)" \
+		OPTIMIZER="$(CFLAGS) $(CPPFLAGS)" \
+		LDFLAGS='$(LDFLAGS) $$(ARCHFLAG) $$(ZDEFS_FLAG)' \
+		DSO_LDOPTS='-shared $$(LDFLAGS)' \
 		NSS_USE_SYSTEM_SQLITE=1 \
 		NSS_ENABLE_ECC=1 \
+		CHECKLOC= \
 		$(USE_64)
 
 override_dh_auto_clean:
@@ -50,12 +60,16 @@ override_dh_auto_clean:
 		BUILD_OPT=1 \
 		$(USE_64)
 
-	rm -rf $(DISTDIR)
+	rm -rf $(DISTDIR) $(PREPROCESS_FILES:.in=)
 
-override_dh_auto_install:
-	install -m 644 -t debian/libnss3-1d/usr/lib \
-		$(DISTDIR)/lib/*.so.1d
-	install -m 644 -t debian/libnss3-1d/usr/lib/nss \
+override_dh_auto_install: $(PREPROCESS_FILES:.in=)
+	install -m 755 -d debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
+	install -m 644 -t debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH) \
+		$(DISTDIR)/lib/libnss3.so \
+		$(DISTDIR)/lib/libnssutil3.so \
+		$(DISTDIR)/lib/libsmime3.so \
+		$(DISTDIR)/lib/libssl3.so
+	install -m 644 -t debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss \
 		$(DISTDIR)/lib/libfreebl3.so \
 		$(DISTDIR)/lib/libsoftokn3.so \
 		$(DISTDIR)/lib/libnssdbm3.so \
@@ -63,28 +77,37 @@ override_dh_auto_install:
 
 	install -m 644 -t debian/libnss3-dev/usr/include/nss \
 		$(DISTDIR)/public/nss/*
-	install -m 644 -t debian/libnss3-dev/usr/lib \
+	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH) \
 		$(DISTDIR)/lib/libcrmf.a
-	sed 's/@VERSION@/$(UPSTREAM_VERSION)/' debian/nss.pc.in > debian/libnss3-dev/usr/lib/pkgconfig/nss.pc
-	sed 's/@MOD_MAJOR_VERSION@/$(MOD_MAJOR_VERSION)/ ; s/@MOD_MINOR_VERSION@/$(MOD_MINOR_VERSION)/ ; s/@MOD_PATCH_VERSION@/$(MOD_PATCH_VERSION)/' debian/nss-config.in > debian/libnss3-dev/usr/bin/nss-config
-	chmod 755 debian/libnss3-dev/usr/bin/nss-config
+	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig debian/nss.pc
+	install -m 755 -t debian/libnss3-dev/usr/bin debian/nss-config
 
 	install -m 755 -t debian/libnss3-tools/usr/bin \
 		$(foreach bin,certutil cmsutil crlutil modutil pk12util shlibsign signtool signver ssltap pwdecrypt, \
 		$(DISTDIR)/bin/$(bin))
 
 override_dh_strip:
-	dh_strip -a --dbg-package=libnss3-1d-dbg
+	dh_strip -a --dbg-package=libnss3-dbg
 	$(foreach lib,libsoftokn3.so libfreebl3.so libnssdbm3.so, \
-		LD_LIBRARY_PATH=debian/libnss3-1d/usr/lib:debian/libnss3-1d/usr/lib/nss \
-		debian/libnss3-tools/usr/bin/shlibsign -v -i debian/libnss3-1d/usr/lib/nss/$(lib);)
+		LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss \
+		debian/libnss3-tools/usr/bin/shlibsign -v -i debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss/$(lib);)
 	# Check FIPS mode correctly works
 	mkdir debian/tmp
-	LD_LIBRARY_PATH=debian/libnss3-1d/usr/lib:debian/libnss3-1d/usr/lib/nss debian/libnss3-tools/usr/bin/modutil -create -dbdir debian/tmp < /dev/null
-	LD_LIBRARY_PATH=debian/libnss3-1d/usr/lib:debian/libnss3-1d/usr/lib/nss debian/libnss3-tools/usr/bin/modutil -fips true -dbdir debian/tmp < /dev/null
+	LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss debian/libnss3-tools/usr/bin/modutil -create -dbdir debian/tmp < /dev/null
+	LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss debian/libnss3-tools/usr/bin/modutil -fips true -dbdir debian/tmp < /dev/null
 
-override_dh_makeshlibs:
-	dh_makeshlibs -a -V 'libnss3-1d (>= 3.12.7)' -- -c4
+override_dh_makeshlibs: /usr/share/debhelper/autoscripts/postinst-makeshlibs /usr/share/debhelper/autoscripts/postrm-makeshlibs
+	dh_makeshlibs -a -- -c4
+	cat /usr/share/debhelper/autoscripts/postinst-makeshlibs > debian/libnss3.postinst.debhelper
+	cat /usr/share/debhelper/autoscripts/postrm-makeshlibs > debian/libnss3.postrm.debhelper
+
+ifneq (,$(DEB_HOST_MULTIARCH))
+override_dh_gencontrol:
+	dh_gencontrol -- -Vmisc:Multi-Arch=same
+endif
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
 
 %:
 	dh $@
