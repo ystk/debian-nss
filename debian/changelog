@@ -1,3 +1,16 @@
+nss (3.12.8-1+squeeze8) squeeze-lts; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * Fix CVE-2014-1492: Incorrect IDNA domain name matching for wildcard
+    certificates.
+  * Fix CVE-2014-1491: Do not allow p-1 as a public DH value.
+  * Fix CVE-2013-5606: Properly return a certificate validation error when
+    using the verifylog mode.
+  * Fix CVE-2013-1741: Runaway memset in certificate parsing on 64-bit
+    computers leading to a crash by attempting to write 4Gb of nulls.
+
+ -- Raphael Geissert <geissert@debian.org>  Tue, 29 Jul 2014 10:20:05 +0200
+
 nss (3.12.8-1+squeeze7) squeeze-security; urgency=high
 
   * Non-maintainer upload by the Security Team.
