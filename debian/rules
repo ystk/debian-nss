@@ -20,24 +20,33 @@ debian/nss.pc: EXTRA_REPLACES := s/@VERSION@/$(UPSTREAM_VERSION)/
 debian/nss-config: EXTRA_REPLACES := s/@MOD_MAJOR_VERSION@/$(MOD_MAJOR_VERSION)/;s/@MOD_MINOR_VERSION@/$(MOD_MINOR_VERSION)/;s/@MOD_PATCH_VERSION@/$(MOD_PATCH_VERSION)/
 debian/libnss3.lintian-overrides: EXTRA_REPLACES := s,/@DEB_HOST_MULTIARCH_WC@,$(DEB_HOST_MULTIARCH:%=/*),g
 
-ifneq (,$(filter 64 alpha amd64 ia64 s390x,$(shell dpkg-architecture -qDEB_BUILD_ARCH_BITS 2> /dev/null || dpkg-architecture -qDEB_BUILD_ARCH)))
+ifneq (,$(filter 64 alpha amd64 ia64 s390x,$(shell dpkg-architecture -qDEB_HOST_ARCH_BITS 2> /dev/null || dpkg-architecture -qDEB_HOST_ARCH)))
 USE_64 := USE_64=1
 else
 USE_64 :=
 endif
 
+# $(foreach foo,$(list),$(call cmd,some command $(foo))) expands to
+#    some command first-elem
+#    some command second-elem
+#    etc.
+# This avoid using a long one liner with semi colons.
+define cmd
+$(1)
+
+endef
+
 CFLAGS += -Wall -pipe
 
-DISTDIR := $(CURDIR)/mozilla/dist
+DISTDIR := $(CURDIR)/dist
 
 override_dh_auto_build:
-	$(MAKE) -C mozilla/security/nss \
-		build_coreconf \
-		build_dbm \
+	$(MAKE) -C nss \
 		all \
 		MOZILLA_CLIENT=1 \
 		NSPR_INCLUDE_DIR=/usr/include/nspr \
 		NSPR_LIB_DIR=/usr/lib \
+		SOURCE_PREFIX=$(DISTDIR) \
 		SOURCE_MD_DIR=$(DISTDIR) \
 		DIST=$(DISTDIR) \
 		BUILD_OPT=1 \
@@ -51,10 +60,9 @@ override_dh_auto_build:
 		$(USE_64)
 
 override_dh_auto_clean:
-	-$(MAKE) -C mozilla/security/nss \
+	-$(MAKE) -C nss \
 		clobber \
-		clobber_dbm \
-		clobber_coreconf \
+		SOURCE_PREFIX=$(DISTDIR) \
 		SOURCE_MD_DIR=$(DISTDIR) \
 		DIST=$(DISTDIR) \
 		BUILD_OPT=1 \
@@ -83,8 +91,40 @@ override_dh_auto_install: $(PREPROCESS_FILES:.in=)
 	install -m 755 -t debian/libnss3-dev/usr/bin debian/nss-config
 
 	install -m 755 -t debian/libnss3-tools/usr/bin \
-		$(foreach bin,certutil cmsutil crlutil modutil pk12util shlibsign signtool signver ssltap pwdecrypt, \
-		$(DISTDIR)/bin/$(bin))
+		$(foreach bin, \
+			certutil \
+			chktest \
+			cmsutil \
+			crlutil \
+			derdump \
+			httpserv \
+			modutil \
+			ocspclnt \
+			p7content \
+			p7env \
+			p7sign \
+			p7verify \
+			pk12util \
+			pk1sign \
+			pwdecrypt \
+			rsaperf \
+			selfserv \
+			shlibsign \
+			signtool \
+			signver \
+			ssltap \
+			strsclnt \
+			symkeyutil \
+			tstclnt \
+			vfychain \
+			vfyserv \
+		, $(DISTDIR)/bin/$(bin))
+	# these utilities are too generically-named, so we prefix them with nss- (see http://bugs.debian.org/701141)
+	$(foreach bin, \
+		addbuiltin \
+		dbtest \
+		pp \
+		, $(call cmd,install -m 755 -T $(DISTDIR)/bin/$(bin) debian/libnss3-tools/usr/bin/nss-$(bin)))
 
 override_dh_strip:
 	dh_strip -a --dbg-package=libnss3-dbg
