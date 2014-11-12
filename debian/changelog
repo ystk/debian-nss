@@ -1,3 +1,10 @@
+nss (3.12.8-1+squeeze9) squeeze-lts; urgency=low
+
+  * Non-maintainer upload by the Squeeze LTS Team.
+  * Fix CVE-2014-1568: RSA signature verification bypass.
+
+ -- Holger Levsen <holger@debian.org>  Thu, 25 Sep 2014 07:56:39 +0000
+
 nss (3.12.8-1+squeeze8) squeeze-lts; urgency=high
 
   * Non-maintainer upload by the Security Team.
