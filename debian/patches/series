@@ -5,3 +5,5 @@
 95_add_spi+cacert_ca_certs.patch
 97_SSL_RENEGOTIATE_TRANSITIONAL.patch
 98_CVE-2014-1569.patch
+99_CVE-2015-2721.patch
+100_CVE-2015-2730.patch

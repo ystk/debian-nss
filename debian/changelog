@@ -1,3 +1,14 @@
+nss (2:3.17.2-1.1+deb8u1) jessie-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * Add 99_CVE-2015-2721.patch patch.
+    CVE-2015-2721: NSS incorrectly permits skipping of ServerKeyExchange.
+  * Add 100_CVE-2015-2730.patch patch.
+    CVE-2015-2730: ECDSA signature validation fails to handle some
+    signatures correctly.
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Tue, 11 Aug 2015 19:37:12 +0200
+
 nss (2:3.17.2-1.1) unstable; urgency=medium
 
   * Non-maintainer upload.
