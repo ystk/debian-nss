@@ -1,3 +1,12 @@
+nss (2:3.17.2-1.1+deb8u2) jessie; urgency=medium
+
+  [ Andrew Ayer ]
+  * Apply upstream patch (99_prefer_stronger_cert_chains.patch) to fix
+    certificate chain generation to prefer stronger/newer certificates
+    over weaker/older certs. Closes: #774195.
+
+ -- Christoph Egger <christoph@debian.org>  Sat, 15 Aug 2015 12:40:31 +0200
+
 nss (2:3.17.2-1.1+deb8u1) jessie-security; urgency=high
 
   * Non-maintainer upload by the Security Team.

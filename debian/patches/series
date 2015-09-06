@@ -7,3 +7,4 @@
 98_CVE-2014-1569.patch
 99_CVE-2015-2721.patch
 100_CVE-2015-2730.patch
+101_prefer_stronger_cert_chains.patch
