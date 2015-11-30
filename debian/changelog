@@ -1,3 +1,25 @@
+nss (3.12.8-1+squeeze12) squeeze-lts; urgency=medium
+
+  * Non-maintainer upload by the Debian LTS Team.
+  * Add CVE-2015-2730.patch:
+    CVE-2015-2730: ECDSA signature validation fails to handle some 
+    signatures correctly.
+  * Add CVE-2015-2721.patch:
+    CVE-2015-2721: NSS incorrectly permits skipping of ServerKeyExchange.
+
+ -- Guido Günther <agx@sigxcpu.org>  Sat, 26 Sep 2015 14:29:48 +0200
+
+nss (3.12.8-1+squeeze11) squeeze-lts; urgency=medium
+
+  * Non-maintainer upload by the Debian LTS team.
+  * Fix CVE-2011-3389 by backporting the upstream patch:
+    https://hg.mozilla.org/projects/nss/rev/7f7446fcc7ab
+  * Fix CVE-2014-1569 by backporting the upstream patch:
+    https://hg.mozilla.org/projects/nss/rev/a163e09dc4d5
+    Closes: #773625
+
+ -- Raphaël Hertzog <hertzog@debian.org>  Mon, 16 Feb 2015 14:49:54 +0100
+
 nss (3.12.8-1+squeeze10) squeeze-lts; urgency=low
 
   * Non-maintainer upload by the Squeeze LTS Team.
