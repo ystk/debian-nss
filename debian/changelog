@@ -1,3 +1,24 @@
+nss (3.12.8-1+squeeze14) squeeze-lts; urgency=medium
+
+  * Non-maintainer upload by the Debian LTS Team.
+  * Add CVE-2016-1938.patch:
+    CVE-2016-1938: The s_mp_div function improperly divides numbers
+
+ -- Guido Günther <agx@sigxcpu.org>  Tue, 23 Feb 2016 21:21:28 +0100
+
+nss (3.12.8-1+squeeze13) squeeze-lts; urgency=medium
+
+  * Non-maintainer upload by the Debian LTS Team.
+  * Add CVE-2015-7182.patch:
+    CVE-2015-7182: Heap-based buffer overflow in the ASN.1 decoder
+  * Add CVE-2015-7181.patch:
+  * CVE-2015-7181: The sec_asn1d_parse_leaf function improperly restricts
+    access to an unspecified data structure
+  * Add autopkgtest for certificate generation/signing and library linking
+  * Add gbp.conf for LTS
+
+ -- Guido Günther <agx@sigxcpu.org>  Sat, 28 Nov 2015 12:42:04 +0100
+
 nss (3.12.8-1+squeeze12) squeeze-lts; urgency=medium
 
   * Non-maintainer upload by the Debian LTS Team.
