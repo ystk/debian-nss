@@ -79,6 +79,7 @@ override_dh_auto_install: $(PREPROCESS_FILES:.in=)
 		$(DISTDIR)/lib/libssl3.so
 	install -m 644 -t debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss \
 		$(DISTDIR)/lib/libfreebl3.so \
+		$(DISTDIR)/lib/libfreeblpriv3.so \
 		$(DISTDIR)/lib/libsoftokn3.so \
 		$(DISTDIR)/lib/libnssdbm3.so \
 		$(DISTDIR)/lib/libnssckbi.so
@@ -126,15 +127,23 @@ override_dh_auto_install: $(PREPROCESS_FILES:.in=)
 		pp \
 		, $(call cmd,install -m 755 -T $(DISTDIR)/bin/$(bin) debian/libnss3-tools/usr/bin/nss-$(bin)))
 
+ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
+SHLIBSIGN = LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH) debian/libnss3-tools/usr/bin/shlibsign
+else
+SHLIBSIGN = shlibsign
+endif
+
 override_dh_strip:
 	dh_strip -a --dbg-package=libnss3-dbg
-	$(foreach lib,libsoftokn3.so libfreebl3.so libnssdbm3.so, \
-		LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss \
-		debian/libnss3-tools/usr/bin/shlibsign -v -i debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss/$(lib);)
+	$(foreach lib,libsoftokn3.so libfreebl3.so libfreeblpriv3.so libnssdbm3.so, \
+		$(call cmd,umask 022; $(SHLIBSIGN) -v -i debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss/$(lib)))
+
+ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
 	# Check FIPS mode correctly works
 	mkdir debian/tmp
 	LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss debian/libnss3-tools/usr/bin/modutil -create -dbdir debian/tmp < /dev/null
 	LD_LIBRARY_PATH=debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH):debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss debian/libnss3-tools/usr/bin/modutil -fips true -dbdir debian/tmp < /dev/null
+endif
 
 override_dh_makeshlibs: /usr/share/debhelper/autoscripts/postinst-makeshlibs /usr/share/debhelper/autoscripts/postrm-makeshlibs
 	dh_makeshlibs -a -- -c4

@@ -1,612 +1,318 @@
-#include "prio.h"
-#include "prerror.h"
-#include "prlog.h"
-#include "pk11func.h"
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "secerr.h"
 #include "ssl.h"
 #include "sslerr.h"
 #include "sslproto.h"
-#include "keyhi.h"
-
 #include <memory>
+#include <functional>
 
-#include "test_io.h"
+extern "C" {
+// This is not something that should make you happy.
+#include "libssl_internals.h"
+}
+
+#include "scoped_ptrs.h"
 #include "tls_parser.h"
-
-#define GTEST_HAS_RTTI 0
-#include "gtest/gtest.h"
+#include "tls_filter.h"
+#include "tls_connect.h"
 #include "gtest_utils.h"
 
 namespace nss_test {
 
-#define LOG(a) std::cerr << name_ << ": " << a << std::endl;
-
-// Inspector that parses out DTLS records and passes
-// them on.
-class TlsRecordInspector : public Inspector {
- public:
-  virtual void Inspect(DummyPrSocket* adapter, const void* data, size_t len) {
-    TlsRecordParser parser(static_cast<const unsigned char*>(data), len);
-
-    uint8_t content_type;
-    std::auto_ptr<DataBuffer> buf;
-    while (parser.NextRecord(&content_type, &buf)) {
-      OnRecord(adapter, content_type, buf->data(), buf->len());
-    }
-  }
-
-  virtual void OnRecord(DummyPrSocket* adapter, uint8_t content_type,
-                        const unsigned char* record, size_t len) = 0;
-};
-
-// Inspector that injects arbitrary packets based on
-// DTLS records of various types.
-class TlsInspectorInjector : public TlsRecordInspector {
- public:
-  TlsInspectorInjector(uint8_t packet_type, uint8_t handshake_type,
-                       const unsigned char* data, size_t len)
-      : packet_type_(packet_type),
-        handshake_type_(handshake_type),
-        injected_(false),
-        data_(data, len) {}
-
-  virtual void OnRecord(DummyPrSocket* adapter, uint8_t content_type,
-                        const unsigned char* data, size_t len) {
-    // Only inject once.
-    if (injected_) {
-      return;
-    }
-
-    // Check that the first byte is as requested.
-    if (content_type != packet_type_) {
-      return;
-    }
-
-    if (handshake_type_ != 0xff) {
-      // Check that the packet is plausibly long enough.
-      if (len < 1) {
-        return;
-      }
-
-      // Check that the handshake type is as requested.
-      if (data[0] != handshake_type_) {
-        return;
-      }
-    }
-
-    adapter->WriteDirect(data_.data(), data_.len());
-  }
-
- private:
-  uint8_t packet_type_;
-  uint8_t handshake_type_;
-  bool injected_;
-  DataBuffer data_;
-};
-
-// Make a copy of the first instance of a message.
-class TlsInspectorRecordHandshakeMessage : public TlsRecordInspector {
- public:
-  TlsInspectorRecordHandshakeMessage(uint8_t handshake_type)
-      : handshake_type_(handshake_type), buffer_() {}
-
-  virtual void OnRecord(DummyPrSocket* adapter, uint8_t content_type,
-                        const unsigned char* data, size_t len) {
-    // Only do this once.
-    if (buffer_.len()) {
-      return;
-    }
-
-    // Check that the first byte is as requested.
-    if (content_type != kTlsHandshakeType) {
-      return;
-    }
-
-    TlsParser parser(data, len);
-    while (parser.remaining()) {
-      unsigned char message_type;
-      // Read the content type.
-      if (!parser.Read(&message_type)) {
-        // Malformed.
-        return;
-      }
-
-      // Read the record length.
-      uint32_t length;
-      if (!parser.Read(&length, 3)) {
-        // Malformed.
-        return;
-      }
-
-      if (adapter->mode() == DGRAM) {
-        // DTLS
-        uint32_t message_seq;
-        if (!parser.Read(&message_seq, 2)) {
-          return;
-        }
-
-        uint32_t fragment_offset;
-        if (!parser.Read(&fragment_offset, 3)) {
-          return;
-        }
-
-        uint32_t fragment_length;
-        if (!parser.Read(&fragment_length, 3)) {
-          return;
-        }
-
-        if ((fragment_offset != 0) || (fragment_length != length)) {
-          // This shouldn't happen because all current tests where we
-          // are using this code don't fragment.
-          return;
-        }
-      }
-
-      unsigned char* dest = nullptr;
-
-      if (message_type == handshake_type_) {
-        buffer_.Allocate(length);
-        dest = buffer_.data();
-      }
-
-      if (!parser.Read(dest, length)) {
-        // Malformed
-        return;
-      }
-
-      if (dest) return;
-    }
-  }
-
-  const DataBuffer& buffer() { return buffer_; }
-
- private:
-  uint8_t handshake_type_;
-  DataBuffer buffer_;
-};
-
-class TlsServerKeyExchangeECDHE {
- public:
-  bool Parse(const unsigned char* data, size_t len) {
-    TlsParser parser(data, len);
-
-    uint8_t curve_type;
-    if (!parser.Read(&curve_type)) {
-      return false;
-    }
-
-    if (curve_type != 3) {  // named_curve
-      return false;
-    }
-
-    uint32_t named_curve;
-    if (!parser.Read(&named_curve, 2)) {
-      return false;
-    }
-
-    uint32_t point_length;
-    if (!parser.Read(&point_length, 1)) {
-      return false;
-    }
-
-    public_key_.Allocate(point_length);
-    if (!parser.Read(public_key_.data(), point_length)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  DataBuffer public_key_;
-};
-
-class TlsAgent : public PollTarget {
- public:
-  enum Role { CLIENT, SERVER };
-  enum State { INIT, CONNECTING, CONNECTED, ERROR };
-
-  TlsAgent(const std::string& name, Role role, Mode mode)
-      : name_(name),
-        mode_(mode),
-        pr_fd_(nullptr),
-        adapter_(nullptr),
-        ssl_fd_(nullptr),
-        role_(role),
-        state_(INIT) {}
-
-  ~TlsAgent() {
-    if (pr_fd_) {
-      PR_Close(pr_fd_);
-    }
-
-    if (ssl_fd_) {
-      PR_Close(ssl_fd_);
-    }
-  }
-
-  bool Init() {
-    pr_fd_ = DummyPrSocket::CreateFD(name_, mode_);
-    if (!pr_fd_) return false;
-
-    adapter_ = DummyPrSocket::GetAdapter(pr_fd_);
-    if (!adapter_) return false;
-
-    return true;
-  }
-
-  void SetPeer(TlsAgent* peer) { adapter_->SetPeer(peer->adapter_); }
-
-  void SetInspector(Inspector* inspector) { adapter_->SetInspector(inspector); }
-
-  void StartConnect() {
-    ASSERT_TRUE(EnsureTlsSetup());
-
-    SECStatus rv;
-    rv = SSL_ResetHandshake(ssl_fd_, role_ == SERVER ? PR_TRUE : PR_FALSE);
-    ASSERT_EQ(SECSuccess, rv);
-    SetState(CONNECTING);
-  }
-
-  void EnableSomeECDHECiphers() {
-    ASSERT_TRUE(EnsureTlsSetup());
-
-    const uint32_t EnabledCiphers[] = {TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                                       TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA};
-
-    for (size_t i = 0; i < PR_ARRAY_SIZE(EnabledCiphers); ++i) {
-      SECStatus rv = SSL_CipherPrefSet(ssl_fd_, EnabledCiphers[i], PR_TRUE);
-      ASSERT_EQ(SECSuccess, rv);
-    }
-  }
-
-  bool EnsureTlsSetup() {
-    // Don't set up twice
-    if (ssl_fd_) return true;
-
-    if (adapter_->mode() == STREAM) {
-      ssl_fd_ = SSL_ImportFD(nullptr, pr_fd_);
-    } else {
-      ssl_fd_ = DTLS_ImportFD(nullptr, pr_fd_);
-    }
-
-    EXPECT_NE(nullptr, ssl_fd_);
-    if (!ssl_fd_) return false;
-    pr_fd_ = nullptr;
-
-    if (role_ == SERVER) {
-      CERTCertificate* cert = PK11_FindCertFromNickname(name_.c_str(), nullptr);
-      EXPECT_NE(nullptr, cert);
-      if (!cert) return false;
-
-      SECKEYPrivateKey* priv = PK11_FindKeyByAnyCert(cert, nullptr);
-      EXPECT_NE(nullptr, priv);
-      if (!priv) return false;  // Leak cert.
-
-      SECStatus rv = SSL_ConfigSecureServer(ssl_fd_, cert, priv, kt_rsa);
-      EXPECT_EQ(SECSuccess, rv);
-      if (rv != SECSuccess) return false;  // Leak cert and key.
-
-      SECKEY_DestroyPrivateKey(priv);
-      CERT_DestroyCertificate(cert);
-    }
-
-    SECStatus rv = SSL_AuthCertificateHook(ssl_fd_, AuthCertificateHook,
-                                           reinterpret_cast<void*>(this));
-    EXPECT_EQ(SECSuccess, rv);
-    if (rv != SECSuccess) return false;
-
-    return true;
-  }
-
-  void SetVersionRange(uint16_t minver, uint16_t maxver) {
-    SSLVersionRange range = {minver, maxver};
-    ASSERT_EQ(SECSuccess, SSL_VersionRangeSet(ssl_fd_, &range));
-  }
-
-  State state() const { return state_; }
-
-  const char* state_str() const { return state_str(state()); }
-
-  const char* state_str(State state) const { return states[state]; }
-
-  PRFileDesc* ssl_fd() { return ssl_fd_; }
-
-  bool version(uint16_t* version) const {
-    if (state_ != CONNECTED) return false;
-
-    *version = info_.protocolVersion;
-
-    return true;
-  }
-
-  bool cipher_suite(int16_t* cipher_suite) const {
-    if (state_ != CONNECTED) return false;
-
-    *cipher_suite = info_.cipherSuite;
-    return true;
-  }
-
-  std::string cipher_suite_name() const {
-    if (state_ != CONNECTED) return "UNKNOWN";
-
-    return csinfo_.cipherSuiteName;
-  }
-
-  void CheckKEAType(SSLKEAType type) const {
-    ASSERT_EQ(CONNECTED, state_);
-    ASSERT_EQ(type, csinfo_.keaType);
-  }
-
-  void CheckVersion(uint16_t version) const {
-    ASSERT_EQ(CONNECTED, state_);
-    ASSERT_EQ(version, info_.protocolVersion);
-  }
-
-  void Handshake() {
-    SECStatus rv = SSL_ForceHandshake(ssl_fd_);
-    if (rv == SECSuccess) {
-      LOG("Handshake success");
-      SECStatus rv = SSL_GetChannelInfo(ssl_fd_, &info_, sizeof(info_));
-      ASSERT_EQ(SECSuccess, rv);
-
-      rv = SSL_GetCipherSuiteInfo(info_.cipherSuite, &csinfo_, sizeof(csinfo_));
-      ASSERT_EQ(SECSuccess, rv);
-
-      SetState(CONNECTED);
-      return;
-    }
-
-    int32_t err = PR_GetError();
-    switch (err) {
-      case PR_WOULD_BLOCK_ERROR:
-        LOG("Would have blocked");
-        // TODO(ekr@rtfm.com): set DTLS timeouts
-        Poller::Instance()->Wait(READABLE_EVENT, adapter_, this,
-                                 &TlsAgent::ReadableCallback);
-        return;
-        break;
-
-      // TODO(ekr@rtfm.com): needs special case for DTLS
-      case SSL_ERROR_RX_MALFORMED_HANDSHAKE:
-      default:
-        LOG("Handshake failed with error " << err);
-        SetState(ERROR);
-        return;
-    }
-  }
-
- private:
-  const static char* states[];
-
-  void SetState(State state) {
-    if (state_ == state) return;
-
-    LOG("Changing state from " << state_str(state_) << " to "
-                               << state_str(state));
-    state_ = state;
-  }
-
-  // Dummy auth certificate hook.
-  static SECStatus AuthCertificateHook(void* arg, PRFileDesc* fd,
-                                       PRBool checksig, PRBool isServer) {
-    return SECSuccess;
-  }
-
-  static void ReadableCallback(PollTarget* self, Event event) {
-    TlsAgent* agent = static_cast<TlsAgent*>(self);
-    agent->ReadableCallback_int(event);
-  }
-
-  void ReadableCallback_int(Event event) {
-    LOG("Readable");
-    Handshake();
-  }
-
-  const std::string name_;
-  Mode mode_;
-  PRFileDesc* pr_fd_;
-  DummyPrSocket* adapter_;
-  PRFileDesc* ssl_fd_;
-  Role role_;
-  State state_;
-  SSLChannelInfo info_;
-  SSLCipherSuiteInfo csinfo_;
-};
-
-const char* TlsAgent::states[] = {"INIT", "CONNECTING", "CONNECTED", "ERROR"};
-
-class TlsConnectTestBase : public ::testing::Test {
- public:
-  TlsConnectTestBase(Mode mode)
-      : mode_(mode),
-        client_(new TlsAgent("client", TlsAgent::CLIENT, mode_)),
-        server_(new TlsAgent("server", TlsAgent::SERVER, mode_)) {}
-
-  ~TlsConnectTestBase() {
-    delete client_;
-    delete server_;
-  }
-
-  void SetUp() { Init(); }
-
-  void Init() {
-    ASSERT_TRUE(client_->Init());
-    ASSERT_TRUE(server_->Init());
-
-    client_->SetPeer(server_);
-    server_->SetPeer(client_);
-  }
-
-  void Reset() {
-    delete client_;
-    delete server_;
-
-    client_ = new TlsAgent("client", TlsAgent::CLIENT, mode_);
-    server_ = new TlsAgent("server", TlsAgent::SERVER, mode_);
-
-    Init();
-  }
-
-  void EnsureTlsSetup() {
-    ASSERT_TRUE(client_->EnsureTlsSetup());
-    ASSERT_TRUE(server_->EnsureTlsSetup());
-  }
-
-  void Connect() {
-    server_->StartConnect();  // Server
-    client_->StartConnect();  // Client
-    client_->Handshake();
-    server_->Handshake();
-
-    ASSERT_TRUE_WAIT(client_->state() != TlsAgent::CONNECTING &&
-                         server_->state() != TlsAgent::CONNECTING,
-                     5000);
-    ASSERT_EQ(TlsAgent::CONNECTED, server_->state());
-
-    int16_t cipher_suite1, cipher_suite2;
-    bool ret = client_->cipher_suite(&cipher_suite1);
-    ASSERT_TRUE(ret);
-    ret = server_->cipher_suite(&cipher_suite2);
-    ASSERT_TRUE(ret);
-    ASSERT_EQ(cipher_suite1, cipher_suite2);
-
-    std::cerr << "Connected with cipher suite " << client_->cipher_suite_name()
-              << std::endl;
-  }
-
-  void EnableSomeECDHECiphers() {
-    client_->EnableSomeECDHECiphers();
-    server_->EnableSomeECDHECiphers();
-  }
-
- protected:
-  Mode mode_;
-  TlsAgent* client_;
-  TlsAgent* server_;
-};
-
-class TlsConnectTest : public TlsConnectTestBase {
- public:
-  TlsConnectTest() : TlsConnectTestBase(STREAM) {}
-};
-
-class DtlsConnectTest : public TlsConnectTestBase {
- public:
-  DtlsConnectTest() : TlsConnectTestBase(DGRAM) {}
-};
-
-class TlsConnectGeneric : public TlsConnectTestBase,
-                          public ::testing::WithParamInterface<std::string> {
- public:
-  TlsConnectGeneric()
-      : TlsConnectTestBase((GetParam() == "TLS") ? STREAM : DGRAM) {
-    std::cerr << "Variant: " << GetParam() << std::endl;
-  }
-};
-
 TEST_P(TlsConnectGeneric, SetupOnly) {}
 
 TEST_P(TlsConnectGeneric, Connect) {
+  SetExpectedVersion(std::get<1>(GetParam()));
   Connect();
+  CheckKeys(ssl_kea_ecdh, ssl_auth_rsa_sign);
+}
 
-  // Check that we negotiated the expected version.
-  if (mode_ == STREAM) {
-    client_->CheckVersion(SSL_LIBRARY_VERSION_TLS_1_0);
-  } else {
-    client_->CheckVersion(SSL_LIBRARY_VERSION_TLS_1_1);
+TEST_P(TlsConnectGeneric, ConnectEcdsa) {
+  SetExpectedVersion(std::get<1>(GetParam()));
+  Reset(TlsAgent::kServerEcdsa);
+  Connect();
+  CheckKeys(ssl_kea_ecdh, ssl_auth_ecdsa);
+}
+
+TEST_P(TlsConnectGenericPre13, ConnectEcdh) {
+  SetExpectedVersion(std::get<1>(GetParam()));
+  Reset(TlsAgent::kServerEcdhEcdsa);
+  DisableAllCiphers();
+  EnableSomeEcdhCiphers();
+
+  Connect();
+  CheckKeys(ssl_kea_ecdh, ssl_auth_ecdh_ecdsa);
+}
+
+TEST_P(TlsConnectGenericPre13, ConnectEcdhWithoutDisablingSuites) {
+  SetExpectedVersion(std::get<1>(GetParam()));
+  Reset(TlsAgent::kServerEcdhEcdsa);
+  EnableSomeEcdhCiphers();
+
+  Connect();
+  CheckKeys(ssl_kea_ecdh, ssl_auth_ecdh_ecdsa);
+}
+
+TEST_P(TlsConnectGenericPre13, ConnectFalseStart) {
+  client_->EnableFalseStart();
+  Connect();
+  SendReceive();
+}
+
+TEST_P(TlsConnectGeneric, ConnectAlpn) {
+  EnableAlpn();
+  Connect();
+  CheckAlpn("a");
+}
+
+TEST_P(TlsConnectGeneric, ConnectAlpnClone) {
+  EnsureModelSockets();
+  Connect();
+  CheckAlpn("a");
+}
+
+TEST_P(TlsConnectDatagram, ConnectSrtp) {
+  EnableSrtp();
+  Connect();
+  CheckSrtp();
+  SendReceive();
+}
+
+// 1.3 is disabled in the next few tests because we don't
+// presently support resumption in 1.3.
+TEST_P(TlsConnectStreamPre13, ConnectAndClientRenegotiate) {
+  Connect();
+  server_->PrepareForRenegotiate();
+  client_->StartRenegotiate();
+  Handshake();
+  CheckConnected();
+}
+
+TEST_P(TlsConnectStreamPre13, ConnectAndServerRenegotiate) {
+  Connect();
+  client_->PrepareForRenegotiate();
+  server_->StartRenegotiate();
+  Handshake();
+  CheckConnected();
+}
+
+TEST_P(TlsConnectGeneric, ConnectEcdhe) {
+  Connect();
+  CheckKeys(ssl_kea_ecdh, ssl_auth_rsa_sign);
+}
+
+TEST_P(TlsConnectGeneric, ConnectSendReceive) {
+  Connect();
+  SendReceive();
+}
+
+// The next two tests takes advantage of the fact that we
+// automatically read the first 1024 bytes, so if
+// we provide 1200 bytes, they overrun the read buffer
+// provided by the calling test.
+
+// DTLS should return an error.
+TEST_P(TlsConnectDatagram, ShortRead) {
+  Connect();
+  client_->SetExpectedReadError(true);
+  server_->SendData(1200, 1200);
+  WAIT_(client_->error_code() == SSL_ERROR_RX_SHORT_DTLS_READ, 2000);
+  // Don't call CheckErrorCode() because it requires us to being
+  // in state ERROR.
+  ASSERT_EQ(SSL_ERROR_RX_SHORT_DTLS_READ, client_->error_code());
+
+  // Now send and receive another packet.
+  client_->SetExpectedReadError(false);
+  server_->ResetSentBytes(); // Reset the counter.
+  SendReceive();
+}
+
+// TLS should get the write in two chunks.
+TEST_P(TlsConnectStream, ShortRead) {
+  // This test behaves oddly with TLS 1.0 because of 1/n+1 splitting,
+  // so skip in that case.
+  if (version_ < SSL_LIBRARY_VERSION_TLS_1_1)
+    return;
+
+  Connect();
+  server_->SendData(1200, 1200);
+  // Read the first tranche.
+  WAIT_(client_->received_bytes() == 1024, 2000);
+  ASSERT_EQ(1024U, client_->received_bytes());
+  // The second tranche should now immediately be available.
+  client_->ReadBytes();
+  ASSERT_EQ(1200U, client_->received_bytes());
+}
+
+TEST_P(TlsConnectGeneric, ConnectWithCompressionMaybe)
+{
+  EnsureTlsSetup();
+  client_->EnableCompression();
+  server_->EnableCompression();
+  Connect();
+  EXPECT_EQ(client_->version() < SSL_LIBRARY_VERSION_TLS_1_3 &&
+            mode_ != DGRAM, client_->is_compressed());
+  SendReceive();
+}
+
+#ifdef NSS_ENABLE_TLS_1_3
+TEST_F(TlsConnectTest, DamageSecretHandleClientFinished) {
+  client_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
+                           SSL_LIBRARY_VERSION_TLS_1_3);
+  server_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
+                           SSL_LIBRARY_VERSION_TLS_1_3);
+  server_->StartConnect();
+  client_->StartConnect();
+  client_->Handshake();
+  server_->Handshake();
+  std::cerr << "Damaging HS secret\n";
+  SSLInt_DamageHsTrafficSecret(server_->ssl_fd());
+  client_->Handshake();
+  server_->Handshake();
+  // The client thinks it has connected.
+  EXPECT_EQ(TlsAgent::STATE_CONNECTED, client_->state());
+  server_->CheckErrorCode(SSL_ERROR_BAD_HANDSHAKE_HASH_VALUE);
+  client_->Handshake();
+  client_->CheckErrorCode(SSL_ERROR_DECRYPT_ERROR_ALERT);
+}
+
+TEST_F(TlsConnectTest, DamageSecretHandleServerFinished) {
+  client_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
+                           SSL_LIBRARY_VERSION_TLS_1_3);
+  server_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
+                           SSL_LIBRARY_VERSION_TLS_1_3);
+  server_->SetPacketFilter(new AfterRecordN(
+      server_,
+      client_,
+      0, // ServerHello.
+      [this]() {
+        SSLInt_DamageHsTrafficSecret(client_->ssl_fd());
+      }));
+  ConnectExpectFail();
+  client_->CheckErrorCode(SSL_ERROR_BAD_HANDSHAKE_HASH_VALUE);
+  server_->CheckErrorCode(SSL_ERROR_DECRYPT_ERROR_ALERT);
+}
+#endif
+
+TEST_P(TlsConnectDatagram, TestDtlsHolddownExpiry) {
+  Connect();
+  std::cerr << "Expiring holddown timer\n";
+  SSLInt_ForceTimerExpiry(client_->ssl_fd());
+  SSLInt_ForceTimerExpiry(server_->ssl_fd());
+  SendReceive();
+  if (version_ >= SSL_LIBRARY_VERSION_TLS_1_3) {
+    // One for send, one for receive.
+    EXPECT_EQ(2, SSLInt_CountTls13CipherSpecs(client_->ssl_fd()));
   }
 }
 
-TEST_P(TlsConnectGeneric, ConnectTLS_1_1_Only) {
-  EnsureTlsSetup();
-  client_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
-                           SSL_LIBRARY_VERSION_TLS_1_1);
+// Replace the point in the client key exchange message with an empty one
+class ECCClientKEXFilter : public TlsHandshakeFilter {
+public:
+  ECCClientKEXFilter() {}
 
-  server_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_1,
-                           SSL_LIBRARY_VERSION_TLS_1_1);
+protected:
+  virtual PacketFilter::Action FilterHandshake(const HandshakeHeader &header,
+                                               const DataBuffer &input,
+                                               DataBuffer *output) {
+    if (header.handshake_type() != kTlsHandshakeClientKeyExchange) {
+      return KEEP;
+    }
 
-  Connect();
+    // Replace the client key exchange message with an empty point
+    output->Allocate(1);
+    output->Write(0, 0U, 1); // set point length 0
+    return CHANGE;
+  }
+};
 
-  client_->CheckVersion(SSL_LIBRARY_VERSION_TLS_1_1);
+// Replace the point in the server key exchange message with an empty one
+class ECCServerKEXFilter : public TlsHandshakeFilter {
+public:
+  ECCServerKEXFilter() {}
+
+protected:
+  virtual PacketFilter::Action FilterHandshake(const HandshakeHeader &header,
+                                               const DataBuffer &input,
+                                               DataBuffer *output) {
+    if (header.handshake_type() != kTlsHandshakeServerKeyExchange) {
+      return KEEP;
+    }
+
+    // Replace the server key exchange message with an empty point
+    output->Allocate(4);
+    output->Write(0, 3U, 1); // named curve
+    uint32_t curve;
+    EXPECT_TRUE(input.Read(1, 2, &curve)); // get curve id
+    output->Write(1, curve, 2); // write curve id
+    output->Write(3, 0U, 1); // point length 0
+    return CHANGE;
+  }
+};
+
+TEST_P(TlsConnectGenericPre13, ConnectECDHEmptyServerPoint) {
+  // add packet filter
+  server_->SetPacketFilter(new ECCServerKEXFilter());
+  ConnectExpectFail();
+  client_->CheckErrorCode(SSL_ERROR_RX_MALFORMED_SERVER_KEY_EXCH);
 }
 
-TEST_P(TlsConnectGeneric, ConnectTLS_1_2_Only) {
-  EnsureTlsSetup();
-  client_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_2,
-                           SSL_LIBRARY_VERSION_TLS_1_2);
-  server_->SetVersionRange(SSL_LIBRARY_VERSION_TLS_1_2,
-                           SSL_LIBRARY_VERSION_TLS_1_2);
-  Connect();
-  client_->CheckVersion(SSL_LIBRARY_VERSION_TLS_1_2);
+TEST_P(TlsConnectGenericPre13, ConnectECDHEmptyClientPoint) {
+  // add packet filter
+  client_->SetPacketFilter(new ECCClientKEXFilter());
+  ConnectExpectFail();
+  server_->CheckErrorCode(SSL_ERROR_RX_MALFORMED_CLIENT_KEY_EXCH);
 }
 
-TEST_F(TlsConnectTest, ConnectECDHE) {
-  EnableSomeECDHECiphers();
-  Connect();
-  client_->CheckKEAType(ssl_kea_ecdh);
-}
+INSTANTIATE_TEST_CASE_P(GenericStream, TlsConnectGeneric,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesStream,
+                          TlsConnectTestBase::kTlsVAll));
+INSTANTIATE_TEST_CASE_P(GenericDatagram, TlsConnectGeneric,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesDatagram,
+                          TlsConnectTestBase::kTlsV11Plus));
 
-TEST_F(TlsConnectTest, ConnectECDHETwiceReuseKey) {
-  EnableSomeECDHECiphers();
-  TlsInspectorRecordHandshakeMessage* i1 =
-      new TlsInspectorRecordHandshakeMessage(kTlsHandshakeServerKeyExchange);
-  server_->SetInspector(i1);
-  Connect();
-  client_->CheckKEAType(ssl_kea_ecdh);
-  TlsServerKeyExchangeECDHE dhe1;
-  ASSERT_TRUE(dhe1.Parse(i1->buffer().data(), i1->buffer().len()));
+INSTANTIATE_TEST_CASE_P(StreamOnly, TlsConnectStream,
+                        TlsConnectTestBase::kTlsVAll);
+INSTANTIATE_TEST_CASE_P(DatagramOnly, TlsConnectDatagram,
+                        TlsConnectTestBase::kTlsV11Plus);
 
-  // Restart
-  Reset();
-  TlsInspectorRecordHandshakeMessage* i2 =
-      new TlsInspectorRecordHandshakeMessage(kTlsHandshakeServerKeyExchange);
-  server_->SetInspector(i2);
-  EnableSomeECDHECiphers();
-  Connect();
-  client_->CheckKEAType(ssl_kea_ecdh);
+INSTANTIATE_TEST_CASE_P(Pre12Stream, TlsConnectPre12,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesStream,
+                          TlsConnectTestBase::kTlsV10V11));
+INSTANTIATE_TEST_CASE_P(Pre12Datagram, TlsConnectPre12,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesDatagram,
+                          TlsConnectTestBase::kTlsV11));
 
-  TlsServerKeyExchangeECDHE dhe2;
-  ASSERT_TRUE(dhe2.Parse(i2->buffer().data(), i2->buffer().len()));
+INSTANTIATE_TEST_CASE_P(Version12Only, TlsConnectTls12,
+                        TlsConnectTestBase::kTlsModesAll);
+#ifdef NSS_ENABLE_TLS_1_3
+INSTANTIATE_TEST_CASE_P(Version13Only, TlsConnectTls13,
+                        TlsConnectTestBase::kTlsModesAll);
+#endif
 
-  // Make sure they are the same.
-  ASSERT_EQ(dhe1.public_key_.len(), dhe2.public_key_.len());
-  ASSERT_TRUE(!memcmp(dhe1.public_key_.data(), dhe2.public_key_.data(),
-                      dhe1.public_key_.len()));
-}
+INSTANTIATE_TEST_CASE_P(Pre13Stream, TlsConnectGenericPre13,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesStream,
+                          TlsConnectTestBase::kTlsV10ToV12));
+INSTANTIATE_TEST_CASE_P(Pre13Datagram, TlsConnectGenericPre13,
+                        ::testing::Combine(
+                             TlsConnectTestBase::kTlsModesDatagram,
+                             TlsConnectTestBase::kTlsV11V12));
+INSTANTIATE_TEST_CASE_P(Pre13StreamOnly, TlsConnectStreamPre13,
+                        TlsConnectTestBase::kTlsV10ToV12);
 
-TEST_F(TlsConnectTest, ConnectECDHETwiceNewKey) {
-  EnableSomeECDHECiphers();
-  SECStatus rv =
-      SSL_OptionSet(server_->ssl_fd(), SSL_REUSE_SERVER_ECDHE_KEY, PR_FALSE);
-  ASSERT_EQ(SECSuccess, rv);
-  TlsInspectorRecordHandshakeMessage* i1 =
-      new TlsInspectorRecordHandshakeMessage(kTlsHandshakeServerKeyExchange);
-  server_->SetInspector(i1);
-  Connect();
-  client_->CheckKEAType(ssl_kea_ecdh);
-  TlsServerKeyExchangeECDHE dhe1;
-  ASSERT_TRUE(dhe1.Parse(i1->buffer().data(), i1->buffer().len()));
-
-  // Restart
-  Reset();
-  EnableSomeECDHECiphers();
-  rv = SSL_OptionSet(server_->ssl_fd(), SSL_REUSE_SERVER_ECDHE_KEY, PR_FALSE);
-  ASSERT_EQ(SECSuccess, rv);
-  TlsInspectorRecordHandshakeMessage* i2 =
-      new TlsInspectorRecordHandshakeMessage(kTlsHandshakeServerKeyExchange);
-  server_->SetInspector(i2);
-  Connect();
-  client_->CheckKEAType(ssl_kea_ecdh);
-
-  TlsServerKeyExchangeECDHE dhe2;
-  ASSERT_TRUE(dhe2.Parse(i2->buffer().data(), i2->buffer().len()));
-
-  // Make sure they are different.
-  ASSERT_FALSE((dhe1.public_key_.len() == dhe2.public_key_.len()) &&
-               (!memcmp(dhe1.public_key_.data(), dhe2.public_key_.data(),
-                        dhe1.public_key_.len())));
-}
-
-INSTANTIATE_TEST_CASE_P(Variants, TlsConnectGeneric,
-                        ::testing::Values("TLS", "DTLS"));
+INSTANTIATE_TEST_CASE_P(Version12Plus, TlsConnectTls12Plus,
+                        ::testing::Combine(
+                          TlsConnectTestBase::kTlsModesAll,
+                          TlsConnectTestBase::kTlsV12Plus));
 
 }  // namespace nspr_test

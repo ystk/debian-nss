@@ -2,9 +2,3 @@
 38_kbsd.patch
 80_security_tools.patch
 85_security_load.patch
-95_add_spi+cacert_ca_certs.patch
-97_SSL_RENEGOTIATE_TRANSITIONAL.patch
-98_CVE-2014-1569.patch
-99_CVE-2015-2721.patch
-100_CVE-2015-2730.patch
-101_prefer_stronger_cert_chains.patch
