@@ -1,3 +1,17 @@
+nss (2:3.26-1+debu8u3) jessie-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * CVE-2017-7805: Potential use-after-free in TLS 1.2 server when verifying
+    client authentication
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Sat, 07 Oct 2017 21:33:20 +0200
+
+nss (2:3.26-1+debu8u2) jessie-security; urgency=medium
+
+  * CVE-2017-5461 CVE-2017-5462 CVE-2017-7502
+
+ -- Moritz Mühlenhoff <jmm@debian.org>  Tue, 30 May 2017 23:40:02 +0200
+
 nss (2:3.26-1+debu8u1) jessie-security; urgency=medium
 
   * New upstream release.  Closes: #583651.

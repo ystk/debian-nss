@@ -2,3 +2,7 @@
 38_kbsd.patch
 80_security_tools.patch
 85_security_load.patch
+CVE-2017-5461.patch
+CVE-2017-5462.patch
+CVE-2017-7502.patch
+CVE-2017-7805.patch
