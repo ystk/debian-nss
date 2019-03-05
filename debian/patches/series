@@ -6,3 +6,9 @@ CVE-2017-5461.patch
 CVE-2017-5462.patch
 CVE-2017-7502.patch
 CVE-2017-7805.patch
+replace_expired_paypal_cert.patch
+CVE-2018-12404_1_of_3.patch
+CVE-2018-12404_2_of_3.patch
+CVE-2018-12404_3_of_3.patch
+CVE-2018-18508_1_of_2.patch
+CVE-2018-18508_2_of_2.patch

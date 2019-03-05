@@ -1,0 +1,29 @@
+Description: Two tests are failing due to PayPalEE.cert having expired
+ $ nss-pp -t c -i tests/libpkix/certs/PayPalEE.cert|grep After
+              Not After : Fri Dec 16 12:00:00 2016
+ We update the associated meta-data and will replace the binary
+ certificates separately through debian/source/include-binaries.
+ .
+ This problem is the same than two years ago:
+ https://bugzilla.mozilla.org/show_bug.cgi?id=1151037
+Author: Raphaël Hertzog <hertzog@debian.org>
+
+--- nss-wheezy.git.orig/nss/tests/chains/scenarios/realcerts.cfg
++++ nss-wheezy.git/nss/tests/chains/scenarios/realcerts.cfg
+@@ -21,7 +21,7 @@
+   result pass
+ 
+ verify PayPalEE:x
+-  policy OID.2.16.840.1.114412.1.1 
++  policy OID.2.16.840.1.114412.2.1 
+   result pass
+ 
+ verify BrAirWaysBadSig:x
+--- nss-wheezy.git.orig/nss/tests/libpkix/vfychain_test.lst
++++ nss-wheezy.git/nss/tests/libpkix/vfychain_test.lst
+@@ -1,4 +1,4 @@
+ # Status | Leaf Cert | Policies | Others(undef)
+ 0 TestUser50 undef
+ 0 TestUser51 undef
+-0 PayPalEE OID.2.16.840.1.114412.1.1
++0 PayPalEE OID.2.16.840.1.114412.2.1

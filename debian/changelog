@@ -1,3 +1,17 @@
+nss (2:3.26-1+debu8u4) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS Security Team.
+  * Update nss/tests/libpkix/certs/PayPalEE.cert to work-around the fact that
+    the former certificate has expired.  The new certificate expiry is
+    2020-08-18.  Also update the expected OID through (adds
+    debian/patches/replace_expired_paypal_cert.patch).
+  * Add patches to fix two security issues:
+    - CVE-2018-12404: Cache side-channel variant of the Bleichenbacher attack
+    - CVE-2018-18508: NULL pointer dereference in several CMS functions
+      resulting in a denial of service (Closes: #921614)
+
+ -- Roberto C. Sanchez <roberto@debian.org>  Mon, 04 Mar 2019 09:46:23 -0500
+
 nss (2:3.26-1+debu8u3) jessie-security; urgency=high
 
   * Non-maintainer upload by the Security Team.
