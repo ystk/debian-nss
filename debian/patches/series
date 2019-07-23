@@ -1,3 +1,4 @@
+nss-3.26.2.patch
 38_hurd.patch
 38_kbsd.patch
 80_security_tools.patch
@@ -12,3 +13,5 @@ CVE-2018-12404_2_of_3.patch
 CVE-2018-12404_3_of_3.patch
 CVE-2018-18508_1_of_2.patch
 CVE-2018-18508_2_of_2.patch
+CVE-2019-11719.patch
+CVE-2019-11729.patch

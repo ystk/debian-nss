@@ -1,3 +1,14 @@
+nss (2:3.26-1+debu8u5) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS Team.
+  * Repackage the new upstream release as debian/patches/nss-3.26.2.patch on top
+    of nss-3.26 to avoid having a version higher than in jessie.
+  * CVE-2019-11719: Out-of-bounds read when importing curve25519 private key
+  * CVE-2019-11729: Empty or malformed p256-ECDH public keys may trigger a
+    segmentation fault
+
+ -- Roberto C. Sanchez <roberto@debian.org>  Sat, 13 Jul 2019 20:38:31 -0400
+
 nss (2:3.26-1+debu8u4) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS Security Team.
