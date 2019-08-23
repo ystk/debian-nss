@@ -79,6 +79,7 @@ override_dh_auto_install: $(PREPROCESS_FILES:.in=)
 		$(DISTDIR)/lib/libssl3.so
 	install -m 644 -t debian/libnss3/usr/lib/$(DEB_HOST_MULTIARCH)/nss \
 		$(DISTDIR)/lib/libfreebl3.so \
+		$(DISTDIR)/lib/libfreebl.a \
 		$(DISTDIR)/lib/libfreeblpriv3.so \
 		$(DISTDIR)/lib/libsoftokn3.so \
 		$(DISTDIR)/lib/libnssdbm3.so \
@@ -86,6 +87,13 @@ override_dh_auto_install: $(PREPROCESS_FILES:.in=)
 
 	install -m 644 -t debian/libnss3-dev/usr/include/nss \
 		$(DISTDIR)/public/nss/*
+
+	# Add a couple of extra include files
+	install -m 644 -t debian/libnss3-dev/usr/include/nss \
+		$(DISTDIR)/private/nss/blapi.h
+	install -m 644 -t debian/libnss3-dev/usr/include/nss \
+		$(DISTDIR)/private/nss/alghmac.h
+
 	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH) \
 		$(DISTDIR)/lib/libcrmf.a
 	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig debian/nss.pc

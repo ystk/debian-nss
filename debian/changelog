@@ -1,3 +1,11 @@
+nss (2:3.26-1+debu8u6) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS team.
+  * Install blapi.h and alghmac.h into libnss3-dev package and libfreebl.a into
+    libnss3 to enable building of SunEC security provider in OpenJDK 7.
+
+ -- Markus Koschany <apo@debian.org>  Thu, 22 Aug 2019 15:40:11 +0000
+
 nss (2:3.26-1+debu8u5) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS Team.
