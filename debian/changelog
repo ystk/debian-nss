@@ -1,3 +1,11 @@
+nss (2:3.26-1+debu8u7) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS Team.
+  * CVE-2019-11745: Out-of-bounds write when passing an output buffer smaller
+    than the block size to NSC_EncryptUpdate
+
+ -- Roberto C. Sanchez <roberto@debian.org>  Mon, 25 Nov 2019 17:14:07 -0500
+
 nss (2:3.26-1+debu8u6) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS team.
