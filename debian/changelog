@@ -1,3 +1,10 @@
+nss (2:3.26-1+debu8u8) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the LTS team.
+  * CVE-2019-17007: 
+
+ -- Mike Gabriel <sunweaver@debian.org>  Fri, 29 Nov 2019 16:04:11 +0100
+
 nss (2:3.26-1+debu8u7) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS Team.
