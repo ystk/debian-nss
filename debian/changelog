@@ -1,7 +1,16 @@
+nss (2:3.26-1+debu8u9) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the LTS team.
+  * debian/changelog:
+    + Add missing CVE-2019-17007 description text in previous changelog
+      stanza.
+
+ -- Mike Gabriel <sunweaver@debian.org>  Fri, 29 Nov 2019 20:49:00 +0100
+
 nss (2:3.26-1+debu8u8) jessie-security; urgency=medium
 
   * Non-maintainer upload by the LTS team.
-  * CVE-2019-17007: 
+  * CVE-2019-17007: check we actually got some certs in collect_certs.
 
  -- Mike Gabriel <sunweaver@debian.org>  Fri, 29 Nov 2019 16:04:11 +0100
 
