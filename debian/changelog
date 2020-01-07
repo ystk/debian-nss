@@ -1,3 +1,13 @@
+nss (2:3.26-1+debu8u10) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS team.
+  * Fix CVE-2019-17006:
+    It was found that certain cryptographic primitives in nss did not check the
+    length of the input text. This could result in a potential heap-based
+    buffer overflow.
+
+ -- Markus Koschany <apo@debian.org>  Mon, 06 Jan 2020 22:25:29 +0100
+
 nss (2:3.26-1+debu8u9) jessie-security; urgency=medium
 
   * Non-maintainer upload by the LTS team.
