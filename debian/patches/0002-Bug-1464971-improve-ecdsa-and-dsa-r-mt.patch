@@ -1,0 +1,191 @@
+From 2fd1a6972e45821ee2d88ad6d661836565f75b2a Mon Sep 17 00:00:00 2001
+From: Franziskus Kiefer <franziskuskiefer@gmail.com>
+Date: Tue, 29 May 2018 09:38:49 +0200
+Subject: Bug 1464971 - improve ecdsa and dsa, r=mt
+
+Differential Revision: https://phabricator.services.mozilla.com/D1441
+
+--HG--
+extra : rebase_source : 7450679ee393f28cef23ca9518752886a046e83f
+extra : amend_source : 0cbd0785fc1a9faafaca87a4c881982e706e4e31
+extra : histedit_source : d146c82f1f014619f594ede560ae30dd29d4e00f%2Cb8933c0916b4aa327484ab3afc400961e7d50eb9
+---
+ nss/lib/freebl/dsa.c | 37 ++++++++++++++++++++++++++-----------
+ nss/lib/freebl/ec.c  | 29 +++++++++++++++++++++++------
+ 2 files changed, 49 insertions(+), 17 deletions(-)
+
+index 9324d306b..aef353967 100644
+--- a/nss/lib/freebl/dsa.c
++++ b/nss/lib/freebl/dsa.c
+@@ -16,14 +16,11 @@
+ #include "blapi.h"
+ #include "nssilock.h"
+ #include "secitem.h"
+-#include "blapi.h"
++#include "blapit.h"
+ #include "mpi.h"
+ #include "secmpi.h"
+ #include "pqg.h"
+ 
+-/* XXX to be replaced by define in blapit.h */
+-#define NSS_FREEBL_DSA_DEFAULT_CHUNKSIZE 2048
+-
+ /*
+  * FIPS 186-2 requires result from random output to be reduced mod q when
+  * generating random numbers for DSA.
+@@ -168,7 +165,7 @@ dsa_NewKeyExtended(const PQGParams *params, const SECItem *seed,
+         return SECFailure;
+     }
+     /* Initialize an arena for the DSA key. */
+-    arena = PORT_NewArena(NSS_FREEBL_DSA_DEFAULT_CHUNKSIZE);
++    arena = PORT_NewArena(NSS_FREEBL_DEFAULT_CHUNKSIZE);
+     if (!arena) {
+         PORT_SetError(SEC_ERROR_NO_MEMORY);
+         return SECFailure;
+@@ -213,8 +210,9 @@ cleanup:
+     mp_clear(&g);
+     mp_clear(&x);
+     mp_clear(&y);
+-    if (key)
++    if (key) {
+         PORT_FreeArena(key->params.arena, PR_TRUE);
++    }
+     if (err) {
+         translate_mpi_error(err);
+         return SECFailure;
+@@ -321,6 +319,7 @@ dsa_SignDigest(DSAPrivateKey *key, SECItem *signature, const SECItem *digest,
+     mp_int x, k;    /* private key & pseudo-random integer */
+     mp_int r, s;    /* tuple (r, s) is signature) */
+     mp_int t;       /* holding tmp values */
++    mp_int ar;      /* holding blinding values */
+     mp_err err = MP_OKAY;
+     SECStatus rv = SECSuccess;
+     unsigned int dsa_subprime_len, dsa_signature_len, offset;
+@@ -364,6 +363,7 @@ dsa_SignDigest(DSAPrivateKey *key, SECItem *signature, const SECItem *digest,
+     MP_DIGITS(&r) = 0;
+     MP_DIGITS(&s) = 0;
+     MP_DIGITS(&t) = 0;
++    MP_DIGITS(&ar) = 0;
+     CHECK_MPI_OK(mp_init(&p));
+     CHECK_MPI_OK(mp_init(&q));
+     CHECK_MPI_OK(mp_init(&g));
+@@ -372,6 +372,7 @@ dsa_SignDigest(DSAPrivateKey *key, SECItem *signature, const SECItem *digest,
+     CHECK_MPI_OK(mp_init(&r));
+     CHECK_MPI_OK(mp_init(&s));
+     CHECK_MPI_OK(mp_init(&t));
++    CHECK_MPI_OK(mp_init(&ar));
+     /*
+     ** Convert stored PQG and private key into MPI integers.
+     */
+@@ -397,14 +398,28 @@ dsa_SignDigest(DSAPrivateKey *key, SECItem *signature, const SECItem *digest,
+         rv = SECFailure;
+         goto cleanup;
+     }
+-    SECITEM_TO_MPINT(t2, &t);                /* t <-$ Zq */
++    SECITEM_TO_MPINT(t2, &t); /* t <-$ Zq */
++    SECITEM_FreeItem(&t2, PR_FALSE);
++    if (DSA_NewRandom(NULL, &key->params.subPrime, &t2) != SECSuccess) {
++        PORT_SetError(SEC_ERROR_NEED_RANDOM);
++        rv = SECFailure;
++        goto cleanup;
++    }
++    SECITEM_TO_MPINT(t2, &ar); /* ar <-$ Zq */
++    SECITEM_FreeItem(&t2, PR_FALSE);
++
++    /* Using mp_invmod on k directly would leak bits from k. */
++    CHECK_MPI_OK(mp_mul(&k, &ar, &k));       /* k = k * ar */
+     CHECK_MPI_OK(mp_mulmod(&k, &t, &q, &k)); /* k = k * t mod q */
+     CHECK_MPI_OK(mp_invmod(&k, &q, &k));     /* k = k**-1 mod q */
+     CHECK_MPI_OK(mp_mulmod(&k, &t, &q, &k)); /* k = k * t mod q */
+     SECITEM_TO_MPINT(localDigest, &s);       /* s = HASH(M)     */
+-    CHECK_MPI_OK(mp_mulmod(&x, &r, &q, &x)); /* x = x * r mod q */
+-    CHECK_MPI_OK(mp_addmod(&s, &x, &q, &s)); /* s = s + x mod q */
+-    CHECK_MPI_OK(mp_mulmod(&s, &k, &q, &s)); /* s = s * k mod q */
++    /* To avoid leaking secret bits here the addition is blinded. */
++    CHECK_MPI_OK(mp_mul(&x, &ar, &x));        /* x = x * ar */
++    CHECK_MPI_OK(mp_mulmod(&x, &r, &q, &x));  /* x = x * r mod q */
++    CHECK_MPI_OK(mp_mulmod(&s, &ar, &q, &t)); /* t = s * ar mod q */
++    CHECK_MPI_OK(mp_add(&t, &x, &s));         /* s = t + x */
++    CHECK_MPI_OK(mp_mulmod(&s, &k, &q, &s));  /* s = s * k mod q */
+     /*
+     ** verify r != 0 and s != 0
+     ** mentioned as optional in FIPS 186-1.
+@@ -438,7 +453,7 @@ cleanup:
+     mp_clear(&r);
+     mp_clear(&s);
+     mp_clear(&t);
+-    SECITEM_FreeItem(&t2, PR_FALSE);
++    mp_clear(&ar);
+     if (err) {
+         translate_mpi_error(err);
+         rv = SECFailure;
+index ebe28aef5..2218a568a 100644
+--- a/nss/lib/freebl/ec.c
++++ b/nss/lib/freebl/ec.c
+@@ -601,6 +601,7 @@ ECDSA_SignDigestWithSeed(ECPrivateKey *key, SECItem *signature,
+     mp_int r, s; /* tuple (r, s) is the signature */
+     mp_int t;    /* holding tmp values */
+     mp_int n;
++    mp_int ar; /* blinding value */
+     mp_err err = MP_OKAY;
+     ECParams *ecParams = NULL;
+     SECItem kGpoint = { siBuffer, NULL, 0 };
+@@ -622,6 +623,7 @@ ECDSA_SignDigestWithSeed(ECPrivateKey *key, SECItem *signature,
+     MP_DIGITS(&s) = 0;
+     MP_DIGITS(&n) = 0;
+     MP_DIGITS(&t) = 0;
++    MP_DIGITS(&ar) = 0;
+ 
+     /* Check args */
+     if (!key || !signature || !digest || !kb || (kblen < 0)) {
+@@ -648,6 +650,7 @@ ECDSA_SignDigestWithSeed(ECPrivateKey *key, SECItem *signature,
+     CHECK_MPI_OK(mp_init(&s));
+     CHECK_MPI_OK(mp_init(&n));
+     CHECK_MPI_OK(mp_init(&t));
++    CHECK_MPI_OK(mp_init(&ar));
+ 
+     SECITEM_TO_MPINT(ecParams->order, &n);
+     SECITEM_TO_MPINT(key->privateValue, &d);
+@@ -763,12 +766,25 @@ ECDSA_SignDigestWithSeed(ECPrivateKey *key, SECItem *signature,
+         goto cleanup;
+     }
+     CHECK_MPI_OK(mp_read_unsigned_octets(&t, t2, 2 * ecParams->order.len)); /* t <-$ Zn */
+-    CHECK_MPI_OK(mp_mulmod(&k, &t, &n, &k));                                /* k = k * t mod n */
+-    CHECK_MPI_OK(mp_invmod(&k, &n, &k));                                    /* k = k**-1 mod n */
+-    CHECK_MPI_OK(mp_mulmod(&k, &t, &n, &k));                                /* k = k * t mod n */
+-    CHECK_MPI_OK(mp_mulmod(&d, &r, &n, &d));                                /* d = d * r mod n */
+-    CHECK_MPI_OK(mp_addmod(&s, &d, &n, &s));                                /* s = s + d mod n */
+-    CHECK_MPI_OK(mp_mulmod(&s, &k, &n, &s));                                /* s = s * k mod n */
++    PORT_Memset(t2, 0, 2 * ecParams->order.len);
++    if (RNG_GenerateGlobalRandomBytes(t2, 2 * ecParams->order.len) != SECSuccess) {
++        PORT_SetError(SEC_ERROR_NEED_RANDOM);
++        rv = SECFailure;
++        goto cleanup;
++    }
++    CHECK_MPI_OK(mp_read_unsigned_octets(&ar, t2, 2 * ecParams->order.len)); /* ar <-$ Zn */
++
++    /* Using mp_invmod on k directly would leak bits from k. */
++    CHECK_MPI_OK(mp_mul(&k, &ar, &k));       /* k = k * ar */
++    CHECK_MPI_OK(mp_mulmod(&k, &t, &n, &k)); /* k = k * t mod n */
++    CHECK_MPI_OK(mp_invmod(&k, &n, &k));     /* k = k**-1 mod n */
++    CHECK_MPI_OK(mp_mulmod(&k, &t, &n, &k)); /* k = k * t mod n */
++    /* To avoid leaking secret bits here the addition is blinded. */
++    CHECK_MPI_OK(mp_mul(&d, &ar, &t));        /* t = d * ar */
++    CHECK_MPI_OK(mp_mulmod(&t, &r, &n, &d));  /* d = t * r mod n */
++    CHECK_MPI_OK(mp_mulmod(&s, &ar, &n, &t)); /* t = s * ar mod n */
++    CHECK_MPI_OK(mp_add(&t, &d, &s));         /* s = t + d */
++    CHECK_MPI_OK(mp_mulmod(&s, &k, &n, &s));  /* s = s * k mod n */
+ 
+ #if EC_DEBUG
+     mp_todecimal(&s, mpstr);
+@@ -806,6 +822,7 @@ cleanup:
+     mp_clear(&s);
+     mp_clear(&n);
+     mp_clear(&t);
++    mp_clear(&ar);
+ 
+     if (t2) {
+         PORT_Free(t2);
+-- 
+2.20.1
+

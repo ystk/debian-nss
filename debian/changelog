@@ -1,3 +1,12 @@
+nss (2:3.26-1+debu8u11) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the LTS team.
+  * CVE-2020-12399: Force a fixed length for DSA exponentiation.
+  * CVE-2020-12402: Side channel vulnerabilities during
+    RSA key generation.
+
+ -- Adrian Bunk <bunk@debian.org>  Mon, 29 Jun 2020 23:05:57 +0300
+
 nss (2:3.26-1+debu8u10) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS team.

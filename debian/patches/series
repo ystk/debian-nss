@@ -18,3 +18,7 @@ CVE-2019-11729.patch
 CVE-2019-11745.patch
 CVE-2019-17007.patch
 CVE-2019-17006.patch
+0001-Bug-1246619-freebl-clang-format-r-kaie.patch
+0002-Bug-1464971-improve-ecdsa-and-dsa-r-mt.patch
+0003-Bug-1631576-Force-a-fixed-length-for-DSA-exponentiat.patch
+0004-Bug-1631597-Constant-time-GCD-and-modular-inversion-.patch
