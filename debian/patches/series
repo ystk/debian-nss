@@ -22,3 +22,7 @@ CVE-2019-17006.patch
 0002-Bug-1464971-improve-ecdsa-and-dsa-r-mt.patch
 0003-Bug-1631576-Force-a-fixed-length-for-DSA-exponentiat.patch
 0004-Bug-1631597-Constant-time-GCD-and-modular-inversion-.patch
+CVE-2020-6829_CVE-2020-12400_Bug-1631583-ECC-constant-time-P-384.patch
+CVE-2020-6829_CVE-2020-12400_Bug-1631583-ECC-constant-time-P-521.patch
+CVE-2020-12401_Bug-1631573-Remove-unnecessary-scalar-padding-in-ec.c.patch
+CVE-2020-12403.patch

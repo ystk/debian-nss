@@ -1,3 +1,22 @@
+nss (2:3.26-1+debu8u13) jessie-security; urgency=high
+
+  * Non-maintainer upload by the ELTS team.
+  * Fix CVE-2020-12403:
+    The ChaCha20 symmetric key cipher algorithm did not correctly enforce the
+    tag length which may have led to an out-of-bounds read and a lack of
+    confidentiality.
+
+ -- Markus Koschany <apo@debian.org>  Mon, 31 Aug 2020 17:37:32 +0200
+
+nss (2:3.26-1+debu8u12) jessie-security; urgency=high
+
+  * Non-maintainer upload by the ELTS Team.
+  * CVE-2020-6829, CVE-2020-12400: Side channel attack on ECDSA signature
+    generation in P-384 and P-521 modular inversion function implementation.
+  * CVE-2020-12401: ECDSA timing attack mitigation bypass.
+
+ -- Roberto C. Sanchez <roberto@debian.org>  Sat, 01 Aug 2020 20:12:04 -0400
+
 nss (2:3.26-1+debu8u11) jessie-security; urgency=medium
 
   * Non-maintainer upload by the LTS team.
