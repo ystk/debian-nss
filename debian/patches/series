@@ -26,3 +26,4 @@ CVE-2020-6829_CVE-2020-12400_Bug-1631583-ECC-constant-time-P-384.patch
 CVE-2020-6829_CVE-2020-12400_Bug-1631583-ECC-constant-time-P-521.patch
 CVE-2020-12401_Bug-1631573-Remove-unnecessary-scalar-padding-in-ec.c.patch
 CVE-2020-12403.patch
+CVE-2021-43527.patch

@@ -1,3 +1,10 @@
+nss (2:3.26-1+debu8u14) jessie-security; urgency=high
+
+  * Non-maintainer upload by the ELTS team.
+  * Add patch to fix CVE-2021-43527.
+
+ -- Utkarsh Gupta <utkarsh@debian.org>  Thu, 02 Dec 2021 17:24:55 +0530
+
 nss (2:3.26-1+debu8u13) jessie-security; urgency=high
 
   * Non-maintainer upload by the ELTS team.
