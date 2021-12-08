@@ -1,3 +1,11 @@
+nss (2:3.26-1+debu8u15) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the LTS team.
+  * Add missing breaks; in secvfy.c to fix
+    regressions w/ ssl connections. (Closes: #1001219)
+
+ -- Utkarsh Gupta <utkarsh@debian.org>  Wed, 08 Dec 2021 03:26:49 +0530
+
 nss (2:3.26-1+debu8u14) jessie-security; urgency=high
 
   * Non-maintainer upload by the ELTS team.
