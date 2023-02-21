@@ -1,3 +1,14 @@
+nss (2:3.26-1+debu8u17) jessie-security; urgency=high
+
+  * Non-maintainer upload by the ELTS team.
+  * Fix CVE-2023-0767:
+    Christian Holler discovered that incorrect handling of PKCS 12 Safe Bag
+    attributes in nss, the Mozilla Network Security Service library, may result
+    in execution of arbitrary code if a specially crafted PKCS 12 certificate
+    bundle is processed.
+
+ -- Markus Koschany <apo@debian.org>  Mon, 20 Feb 2023 23:53:34 +0100
+
 nss (2:3.26-1+debu8u16) jessie-security; urgency=medium
 
   * Non-maintainer upload by the ELTS team.

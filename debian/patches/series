@@ -28,3 +28,4 @@ CVE-2020-12401_Bug-1631573-Remove-unnecessary-scalar-padding-in-ec.c.patch
 CVE-2020-12403.patch
 CVE-2021-43527.patch
 CVE-2022-22747.patch
+CVE-2023-0767.patch
