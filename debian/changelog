@@ -1,3 +1,14 @@
+nss (2:3.26-1+debu8u18) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the ELTS team.
+  * Backport patch for CVE-2023-4421 - Bleichenbacher attack
+  * Backport upstream patch for CVE-2023-5388, Timing attack against RSA
+    decryption. Closes: #1056284.
+  * backport upstream patch for CVE-2024-0743, Unchecked return value could
+    cause crash.
+
+ -- Tobias Frost <tobi@debian.org>  Sun, 10 Mar 2024 17:48:51 +0100
+
 nss (2:3.26-1+debu8u17) jessie-security; urgency=high
 
   * Non-maintainer upload by the ELTS team.
