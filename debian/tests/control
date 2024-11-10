@@ -1,0 +1,6 @@
+Tests: smoke-test
+Depends: @
+
+Tests: certutil-basic-workflow
+Depends: @
+Restrictions: allow-stderr

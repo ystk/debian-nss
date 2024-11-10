@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e
+
+BINARY_NAME="libnss3-tools"
+BINARIES_PATH="/usr/bin/"
+
+has_usage_keyword() {
+    binary=$1
+
+    if ${binary} -h 2>&1 | grep -q 'Usage:' ; then
+        return 0
+    fi
+    if ${binary} -H 2>&1 | grep -q 'Usage:' ; then
+        return 0
+    fi
+    if ${binary} 2>&1 | grep -q 'Usage:' ; then
+        return 0
+    fi
+    return 1
+}
+
+has_some_help_text() {
+    HOW_MANY_HELP_LINES=3
+    binary=$1
+
+    if [ $(${binary} -h 2>&1 | wc -l) -ge ${HOW_MANY_HELP_LINES} ] ; then
+        return 0
+    fi
+    if [ $(${binary} -H 2>&1 | wc -l) -ge ${HOW_MANY_HELP_LINES} ] ; then
+        return 0
+    fi
+    if [ $(${binary} 2>&1 | wc -l) -ge ${HOW_MANY_HELP_LINES} ] ; then
+        return 0
+    fi
+    return 1
+}
+# this smoke test checks that all binaries have been correctly compiled and linked,
+# so that they can run a normal command, such as trying to get the help output
+test_help_output() {
+    for binary in $(dpkg -L ${BINARY_NAME} | grep ${BINARIES_PATH}) ; do
+        if has_usage_keyword ${binary} ; then
+            echo "INFO: ${binary} has at least the 'Usage' keyword. OK"
+            continue
+        fi
+        if has_some_help_text ${binary} ; then
+            echo "INFO: ${binary} has at least some help text. OK"
+            continue
+        fi
+        echo "ERROR: ${FUNCNAME}: unexpected help output in ${binary}. Please check by hand" >&2
+        exit 1
+    done
+
+    echo "INFO: ${FUNCNAME}: passed OK"
+}
+
+# we also verify the debian package contains at least this many binaries
+# yes, this test will fail if some binary is purposedly dropped from the package
+test_number_of_binaries() {
+    HOW_MANY_BINARIES=29
+
+    number=$(dpkg -L ${BINARY_NAME} | grep ${BINARIES_PATH} | wc -l)
+    if [ ${number} -lt ${HOW_MANY_BINARIES} ] ; then
+        echo "ERROR: ${FUNCNAME}: unexpected number of utils (${number} vs ${HOW_MANY_BINARIES}) in the ${BINARY_NAME} package." >&2
+        exit 1
+    fi
+    echo "INFO: ${FUNCNAME}: passed OK"
+}
+
+# execute the tests!
+test_help_output
+test_number_of_binaries

@@ -56,6 +56,7 @@ override_dh_auto_build:
 		DSO_LDOPTS='-shared $$(LDFLAGS)' \
 		NSS_USE_SYSTEM_SQLITE=1 \
 		NSS_ENABLE_ECC=1 \
+		NSS_DISABLE_GTESTS=1 \
 		CHECKLOC= \
 		$(USE_64)
 

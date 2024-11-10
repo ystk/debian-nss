@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# this test executes a basic certutil workflow
+
+set -e
+
+TMPDIR="$(mktemp -d)"
+DB_DIR="${TMPDIR}/db"
+REQ_FILE="${TMPDIR}/req"
+NOISE_FILE="${TMPDIR}/noise"
+CA_FILE="${TMPDIR}/ca"
+CERT_FILE="${TMPDIR}/cert"
+ISSUER="CN=nss-autopkgtest-CA"
+SUBJECT="CN=nss-autopkgtest"
+FILE_TO_SIGN="${TMPDIR}/to_sign.txt"
+CANARY_TEXT="this is a message"
+SIGNED_FILE="${TMPDIR}/signed.p7s"
+
+echo "INFO: create certificate db"
+mkdir ${DB_DIR}
+certutil -N --empty-password -d ${DB_DIR}
+
+echo "INFO: generate noise file"
+head /dev/urandom > ${NOISE_FILE}
+
+echo "INFO: creating a self-signed root CA"
+certutil -S -s ${ISSUER} -n ${CA_FILE} -z ${NOISE_FILE} -x -t "CT,C,C" -v 120 -m 1234 -d ${DB_DIR}
+
+echo "INFO: create certificate request"
+certutil -R -s ${SUBJECT} -z ${NOISE_FILE} -o ${REQ_FILE} -d ${DB_DIR}
+
+echo "INFO: sign certificate request"
+certutil -C -i ${REQ_FILE} -o ${CERT_FILE} -c ${CA_FILE} -d ${DB_DIR} -m 123456
+
+echo "INFO: add cert to the DB"
+certutil -A -d ${DB_DIR} -i ${CERT_FILE} -n ${SUBJECT} -t "u,u,u"
+
+echo "INFO: list what we have in the certificate DB"
+certutil -K -d ${DB_DIR} | grep "NSS Certificate DB:${SUBJECT}"
+
+echo "INFO: create file to be signed"
+echo "${CANARY_TEXT}" > ${FILE_TO_SIGN}
+
+echo "INFO: sign file "
+cmsutil -S -d ${DB_DIR} -N ${SUBJECT} -i ${FILE_TO_SIGN} -o ${SIGNED_FILE}
+
+echo "INFO: decode it"
+cmsutil -D -d ${DB_DIR} -i ${SIGNED_FILE} | grep "${CANARY_TEXT}"
+
+echo "INFO: cleanup! tests OK"
+rm -rfv --preserve-root --one-file-system "${TMPDIR}"
